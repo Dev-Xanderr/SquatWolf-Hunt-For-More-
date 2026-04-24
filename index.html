@@ -308,6 +308,66 @@
     animation: slideUp 0.6s ease 1s both;
   }
 
+  .prize-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 400px;
+    animation: slideUp 0.6s ease 0.8s both;
+  }
+
+  .prize-info.loading { opacity: 0.4; }
+
+  .prize-headline {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem;
+    letter-spacing: 0.12em;
+    color: var(--off-white);
+    text-align: center;
+    margin-top: 0.5rem;
+  }
+
+  .prize-headline.win { color: var(--aurora-red); }
+
+  .prize-sub {
+    margin-top: 0.6rem;
+    font-size: 0.7rem;
+    line-height: 1.5;
+    letter-spacing: 0.08em;
+    color: var(--mid-grey);
+    text-align: center;
+    text-transform: uppercase;
+    padding: 0 0.5rem;
+  }
+
+  .prize-badge {
+    margin-top: 1.2rem;
+    padding: 0.9rem 2rem;
+    background: var(--aurora-red);
+    color: var(--off-white);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.18em;
+    border-radius: 6px;
+    text-align: center;
+  }
+
+  .prize-badge.sold-out {
+    background: transparent;
+    border: 1px solid #333;
+    color: #888;
+  }
+
+  .prize-footnote {
+    margin-top: 1rem;
+    font-size: 0.55rem;
+    letter-spacing: 0.25em;
+    color: #444;
+    text-transform: uppercase;
+    text-align: center;
+  }
+
   @keyframes slideUp {
     from { opacity: 0; transform: translateY(20px); }
     to { opacity: 1; transform: translateY(0); }
@@ -362,8 +422,7 @@
   <h2>PUZZLE COMPLETE</h2>
   <p class="tagline">The pack sees everything</p>
   <img class="full-image" id="fullImage" src="" alt="SQUATWOLF">
-  <button class="cta" onclick="document.getElementById('completedOverlay').classList.remove('show')">CLAIM YOUR PRIZE</button>
-  <p class="booth-msg">Show this screen at the SQUATWOLF booth</p>
+  <div id="prizeInfo" class="prize-info"></div>
 </div>
 
 <script>
@@ -514,7 +573,64 @@ async function render(justUnlocked) {
     setTimeout(() => {
       document.getElementById('fullImage').src = FULL_IMAGE;
       document.getElementById('completedOverlay').classList.add('show');
+      renderPrizeInfo();
     }, 1500);
+  }
+}
+
+// ===== PRIZE STATUS =====
+// Source of truth: prize-status.json in repo. Staff edit it from GitHub
+// when each of the 5 giveaways is handed out. Cache-busted so edits show up fast.
+async function fetchPrizeStatus() {
+  // Test-mode override via URL (?preview=claimed or ?preview=available)
+  // lets you see both screens without consuming a real prize slot.
+  const preview = new URLSearchParams(window.location.search).get('preview');
+  if (preview === 'claimed') return { claimed: 5, total: 5, _preview: true };
+  if (preview === 'available') return { claimed: 0, total: 5, _preview: true };
+
+  try {
+    const res = await fetch('prize-status.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error('status ' + res.status);
+    const data = await res.json();
+    return {
+      claimed: Number(data.claimed) || 0,
+      total: Number(data.total) || 5
+    };
+  } catch (e) {
+    // Fail open: if the file can't be fetched, assume prizes are still
+    // available — booth staff are the final gate anyway.
+    return { claimed: 0, total: 5, _fallback: true };
+  }
+}
+
+async function renderPrizeInfo() {
+  const box = document.getElementById('prizeInfo');
+  if (!box) return;
+  box.classList.add('loading');
+  box.innerHTML = '';
+
+  const status = await fetchPrizeStatus();
+  const remaining = Math.max(0, status.total - status.claimed);
+  const soldOut = remaining <= 0;
+
+  box.classList.remove('loading');
+
+  if (soldOut) {
+    box.innerHTML =
+      '<div class="prize-headline">Prizes claimed</div>' +
+      '<div class="prize-sub">Thank you for participating &mdash; all ' + status.total +
+      ' SQUATWOLF giveaways have already been won.</div>' +
+      '<div class="prize-badge sold-out">Hunt complete</div>' +
+      '<div class="prize-footnote">SQUATWOLF &times; ZIGCHAIN</div>' +
+      (status._preview ? '<div class="prize-footnote">Preview mode</div>' : '');
+  } else {
+    box.innerHTML =
+      '<div class="prize-headline win">You\'re in the running</div>' +
+      '<div class="prize-sub">First ' + status.total + ' people to show this screen at the ' +
+      'SQUATWOLF booth win a giveaway.</div>' +
+      '<div class="prize-badge">Head to the booth</div>' +
+      '<div class="prize-footnote">Show this screen &middot; Staff will verify</div>' +
+      (status._preview ? '<div class="prize-footnote">Preview mode</div>' : '');
   }
 }
 
