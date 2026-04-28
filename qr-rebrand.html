@@ -283,16 +283,20 @@
     ctx.fillRect(0, TOP_STRIP_TOP, IMG_W, TOP_STRIP_BOTTOM - TOP_STRIP_TOP);
     ctx.fillRect(0, BOT_STRIP_TOP, IMG_W, BOT_STRIP_BOTTOM - BOT_STRIP_TOP);
 
-    // Read editable values
+    // Read editable values (with safe fallbacks if any size is cleared)
+    const sizeOr = (id, fallback) => {
+      const v = parseInt(document.getElementById(id).value, 10);
+      return Number.isFinite(v) && v > 0 ? v : fallback;
+    };
     const title = document.getElementById('titleText').value;
-    const titleSize = parseInt(document.getElementById('titleSize').value, 10);
+    const titleSize = sizeOr('titleSize', 30);
     const pieceLabel = document.getElementById('pieceLabelText').value
       .replace('{N}', tile.i);
-    const pieceLabelSize = parseInt(document.getElementById('pieceLabelSize').value, 10);
+    const pieceLabelSize = sizeOr('pieceLabelSize', 26);
     const body = document.getElementById('bodyText').value;
-    const bodySize = parseInt(document.getElementById('bodySize').value, 10);
+    const bodySize = sizeOr('bodySize', 16);
     const callout = document.getElementById('calloutText').value;
-    const calloutSize = parseInt(document.getElementById('calloutSize').value, 10);
+    const calloutSize = sizeOr('calloutSize', 26);
 
     // === TOP STRIP — title + piece label ===
     drawStack(ctx, [
@@ -324,14 +328,20 @@
   }
 
   async function renderAll() {
-    document.getElementById('globalStatus').textContent = 'Rendering…';
-    await document.fonts.ready;
-    await ensureSources();
-    for (const tile of tiles) {
-      await renderTile(tile, sources[tile.i - 1]);
+    const status = document.getElementById('globalStatus');
+    status.textContent = 'Rendering…';
+    try {
+      await document.fonts.ready;
+      await ensureSources();
+      for (const tile of tiles) {
+        await renderTile(tile, sources[tile.i - 1]);
+      }
+      const t = new Date().toLocaleTimeString();
+      status.textContent = 'Rendered at ' + t + ' — preview is live. Click Download per piece, or Download all 9.';
+    } catch (err) {
+      status.textContent = 'Render error: ' + err.message + ' — see console.';
+      console.error(err);
     }
-    document.getElementById('globalStatus').textContent =
-      'Ready. Click any Download button, or use Download all 9.';
   }
 
   function downloadAll() {
