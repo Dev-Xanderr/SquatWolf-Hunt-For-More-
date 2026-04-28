@@ -642,6 +642,19 @@ async function checkParams() {
   const params = new URLSearchParams(window.location.search);
   const piece = parseInt(params.get('p'));
 
+  // Short-circuit if all prizes are already claimed: skip the puzzle
+  // entirely and show the "claimed" message right away. Any QR scan
+  // — whether it's a new visitor or someone returning mid-hunt —
+  // lands directly on the prize-claimed screen.
+  const status = await fetchPrizeStatus();
+  if (status.claimed >= status.total) {
+    showSoldOut();
+    if (window.history.replaceState) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    return;
+  }
+
   if (piece >= 1 && piece <= 9) {
     const unlocked = await getUnlocked();
     const isNew = !unlocked.has(piece);
@@ -657,6 +670,29 @@ async function checkParams() {
   } else {
     await render();
   }
+}
+
+// When sold out, hide the puzzle UI and show the prize-claimed overlay
+// directly. Bypasses the 9-scan flow so no one's wasting time hunting
+// pieces for prizes that no longer exist.
+function showSoldOut() {
+  // Hide everything above the overlay so the page reads as a single
+  // dedicated "thanks, prizes claimed" screen instead of the puzzle.
+  document.querySelectorAll(
+    'header, .progress-bar, .counter, .grid-container, .hint, .footer-brand, .found-banner'
+  ).forEach((el) => { el.style.display = 'none'; });
+
+  const overlay = document.getElementById('completedOverlay');
+  // Clear the puzzle title — sold-out state isn't a "puzzle complete" moment
+  const h2 = overlay.querySelector('h2');
+  const tagline = overlay.querySelector('.tagline');
+  const fullImg = overlay.querySelector('.full-image');
+  if (h2) h2.textContent = 'Hunt closed';
+  if (tagline) tagline.textContent = 'All prizes have been claimed';
+  if (fullImg) fullImg.style.display = 'none';
+
+  overlay.classList.add('show');
+  renderPrizeInfo();
 }
 
 // Init
