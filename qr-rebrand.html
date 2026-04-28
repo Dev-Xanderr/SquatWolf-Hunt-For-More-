@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>QR Rebrand Tool | THE HUNT FOR MORE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --aurora-red: #B93A32;
+    --off-white: #f7f5f2;
+    --mid-grey: #888;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a1a;
+    color: var(--off-white);
+    font-family: 'Space Mono', monospace;
+    padding: 2rem 1rem;
+  }
+  .controls {
+    max-width: 720px;
+    margin: 0 auto 2rem;
+    background: #111;
+    padding: 1.5rem;
+    border-radius: 8px;
+    border: 1px solid #333;
+  }
+  .controls h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.6rem;
+    letter-spacing: 0.15em;
+    margin-bottom: 0.5rem;
+  }
+  .controls p.lead {
+    font-size: 0.8rem;
+    color: var(--mid-grey);
+    margin-bottom: 1rem;
+    line-height: 1.5;
+  }
+  label {
+    display: block;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--mid-grey);
+    margin: 0.8rem 0 0.3rem;
+  }
+  input[type="number"], input[type="range"] {
+    width: 100%;
+    padding: 0.5rem 0.7rem;
+    background: #000;
+    border: 1px solid #333;
+    color: var(--off-white);
+    font-family: 'Space Mono', monospace;
+    border-radius: 4px;
+  }
+  input[type="range"] { padding: 0; }
+  .row { display: flex; gap: 1rem; align-items: flex-end; }
+  .row > div { flex: 1; }
+  button {
+    margin-top: 1rem;
+    padding: 0.7rem 1.4rem;
+    background: var(--aurora-red);
+    color: var(--off-white);
+    border: none;
+    border-radius: 6px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+  }
+  button.secondary { background: #222; border: 1px solid #444; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .tile {
+    background: #0c0c0c;
+    border: 1px solid #222;
+    border-radius: 6px;
+    padding: 0.8rem;
+    text-align: center;
+  }
+  .tile canvas {
+    width: 100%;
+    height: auto;
+    display: block;
+    background: #000;
+    border-radius: 2px;
+  }
+  .tile .label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 0.95rem;
+    letter-spacing: 0.15em;
+    color: var(--mid-grey);
+    margin: 0.6rem 0 0.4rem;
+  }
+  .tile a.dl {
+    display: inline-block;
+    padding: 0.4rem 0.9rem;
+    background: var(--aurora-red);
+    color: var(--off-white);
+    text-decoration: none;
+    border-radius: 4px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 0.85rem;
+    letter-spacing: 0.15em;
+  }
+  .status {
+    margin-top: 0.8rem;
+    font-size: 0.7rem;
+    color: var(--mid-grey);
+  }
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <h1>QR Rebrand</h1>
+  <p class="lead">
+    Loads the existing <code>qr_piece_*.png</code> files, blanks out the
+    bottom caption strip (preserving the red border bars and the QR itself),
+    and re-draws the co-brand at a larger size. The QR pixels are never
+    touched, so existing scans still resolve correctly.
+  </p>
+
+  <div class="row">
+    <div>
+      <label for="cobrandSize">Co-brand font size (px)</label>
+      <input type="range" id="cobrandSize" min="14" max="60" value="36">
+      <div class="status"><span id="sizeReadout">36</span>px (original was ~14px)</div>
+    </div>
+    <div>
+      <label for="letterSpacing">Letter spacing (em)</label>
+      <input type="number" id="letterSpacing" value="0.22" step="0.02" min="0" max="0.5">
+    </div>
+  </div>
+
+  <button onclick="renderAll()">Regenerate preview</button>
+  <button class="secondary" onclick="downloadAll()">Download all 9</button>
+  <div class="status" id="globalStatus">Loading fonts &amp; source images&hellip;</div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<script>
+  // === LAYOUT CONSTANTS ===
+  // Source PNG is 694 x 834. The bottom caption area sits between the QR
+  // frame and the red bottom bar. We repaint this strip black and redraw
+  // the two text lines.
+  //
+  // Measured from qr_piece_1.png:
+  //   - Red bottom bar: y >= 815
+  //   - Bottom edge of white QR frame: y ~ 690
+  //   - "SCAN TO REVEAL PIECE" line was around y=707
+  //   - "SQUATWOLF x ZIGCHAIN" line was around y=736
+  //
+  // We blackout y = 691 .. 814 (full width) and redraw both lines.
+  const STRIP_TOP = 691;
+  const STRIP_BOTTOM = 814; // exclusive of red bar
+  const IMG_W = 694;
+
+  const tiles = [];
+
+  function buildTiles() {
+    const grid = document.getElementById('grid');
+    grid.innerHTML = '';
+    for (let i = 1; i <= 9; i++) {
+      const tile = document.createElement('div');
+      tile.className = 'tile';
+      tile.innerHTML =
+        '<canvas id="cv' + i + '" width="694" height="834"></canvas>' +
+        '<div class="label">PIECE ' + i + ' OF 9</div>' +
+        '<a class="dl" id="dl' + i + '" download="qr_piece_' + i + '.png">Download</a>';
+      grid.appendChild(tile);
+      tiles.push({ i: i, canvas: tile.querySelector('canvas'), link: tile.querySelector('a') });
+    }
+  }
+
+  function loadImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+  }
+
+  // Draw text with manual letter-spacing (canvas letterSpacing isn't
+  // universally supported, especially in older Safari). Returns total width.
+  function measureSpaced(ctx, text, spacingPx) {
+    let w = 0;
+    for (let i = 0; i < text.length; i++) {
+      w += ctx.measureText(text[i]).width;
+      if (i < text.length - 1) w += spacingPx;
+    }
+    return w;
+  }
+  function drawSpaced(ctx, text, x, y, spacingPx) {
+    let cx = x;
+    for (let i = 0; i < text.length; i++) {
+      ctx.fillText(text[i], cx, y);
+      cx += ctx.measureText(text[i]).width + spacingPx;
+    }
+  }
+
+  async function renderTile(tile, sourceImg) {
+    const ctx = tile.canvas.getContext('2d');
+    ctx.clearRect(0, 0, IMG_W, 834);
+    ctx.drawImage(sourceImg, 0, 0);
+
+    // Blackout the caption strip
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, STRIP_TOP, IMG_W, STRIP_BOTTOM - STRIP_TOP);
+
+    // === Line 1: SCAN TO REVEAL PIECE (kept at original modest size) ===
+    const scanSize = 18;
+    const scanSpacing = 0.2; // em
+    ctx.fillStyle = '#888';
+    ctx.font = scanSize + 'px "Space Mono", monospace';
+    ctx.textBaseline = 'middle';
+    const scanText = 'SCAN TO REVEAL PIECE';
+    const scanSpacingPx = scanSize * scanSpacing;
+    const scanW = measureSpaced(ctx, scanText, scanSpacingPx);
+    drawSpaced(ctx, scanText, (IMG_W - scanW) / 2, STRIP_TOP + 22, scanSpacingPx);
+
+    // === Line 2: SQUATWOLF x ZIGCHAIN (the one being enlarged) ===
+    const cbSize = parseInt(document.getElementById('cobrandSize').value, 10);
+    const cbSpacing = parseFloat(document.getElementById('letterSpacing').value);
+    const cbSpacingPx = cbSize * cbSpacing;
+
+    ctx.font = cbSize + 'px "Bebas Neue", sans-serif';
+    ctx.textBaseline = 'middle';
+
+    const left = 'SQUATWOLF';
+    const x = '×';
+    const right = 'ZIGCHAIN';
+    const gap = cbSize * 0.35;
+
+    const wL = measureSpaced(ctx, left, cbSpacingPx);
+    const wX = ctx.measureText(x).width;
+    const wR = measureSpaced(ctx, right, cbSpacingPx);
+    const total = wL + gap + wX + gap + wR;
+
+    // Vertical center of remaining strip (below the SCAN line)
+    const cbY = STRIP_TOP + 22 + 26 + cbSize / 2 + 4;
+
+    let cx = (IMG_W - total) / 2;
+    ctx.fillStyle = '#f7f5f2';
+    drawSpaced(ctx, left, cx, cbY, cbSpacingPx);
+    cx += wL + gap;
+    ctx.fillStyle = '#B93A32';
+    ctx.fillText(x, cx, cbY);
+    cx += wX + gap;
+    ctx.fillStyle = '#f7f5f2';
+    drawSpaced(ctx, right, cx, cbY, cbSpacingPx);
+
+    // Update download link
+    tile.link.href = tile.canvas.toDataURL('image/png');
+  }
+
+  let sources = [];
+
+  async function ensureSources() {
+    if (sources.length === 9) return;
+    sources = await Promise.all(
+      Array.from({ length: 9 }, (_, idx) => loadImage('qr_piece_' + (idx + 1) + '.png'))
+    );
+  }
+
+  async function renderAll() {
+    document.getElementById('globalStatus').textContent = 'Rendering…';
+    await document.fonts.ready;
+    await ensureSources();
+    for (const tile of tiles) {
+      await renderTile(tile, sources[tile.i - 1]);
+    }
+    document.getElementById('globalStatus').textContent =
+      'Ready. Click any Download button, or use Download all 9.';
+  }
+
+  function downloadAll() {
+    tiles.forEach((t, idx) => {
+      // Stagger to avoid the browser blocking multiple downloads
+      setTimeout(() => t.link.click(), idx * 200);
+    });
+  }
+
+  document.getElementById('cobrandSize').addEventListener('input', (e) => {
+    document.getElementById('sizeReadout').textContent = e.target.value;
+  });
+
+  buildTiles();
+  renderAll();
+</script>
+</body>
+</html>
