@@ -379,14 +379,17 @@
   }
 
   .footer-brand {
-    padding: 1.5rem 1rem;
+    padding: 1.5rem 1rem 2rem;
     text-align: center;
-    font-size: 0.5rem;
-    letter-spacing: 0.3em;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem;
+    letter-spacing: 0.25em;
     text-transform: uppercase;
-    color: #222;
+    color: var(--off-white);
     margin-top: auto;
   }
+
+  .footer-brand .x { color: var(--aurora-red); margin: 0 0.25em; }
 </style>
 </head>
 <body>
@@ -416,7 +419,7 @@
 
 <div class="hint" id="hintText">Scan QR codes hidden around the venue to reveal pieces of the puzzle.</div>
 
-<div class="footer-brand">SQUATWOLF &times; ZIGCHAIN</div>
+<div class="footer-brand">SQUATWOLF<span class="x">&times;</span>ZIGCHAIN</div>
 
 <div class="completed-overlay" id="completedOverlay">
   <h2>PUZZLE COMPLETE</h2>
