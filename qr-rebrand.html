@@ -257,12 +257,32 @@
 
   // Draw a single centered line with manual letter-spacing.
   // Returns the y-position used (for stacking).
+  // Horizontal padding kept clear on each side so text never touches the edge
+  const SIDE_PADDING = 24;
+
   function drawCenteredLine(ctx, text, y, fontPx, fontFamily, color, spacingEm, weight) {
-    ctx.font = (weight ? weight + ' ' : '') + fontPx + 'px ' + fontFamily;
+    const maxWidth = IMG_W - SIDE_PADDING * 2;
+    const setFont = (px) => {
+      ctx.font = (weight ? weight + ' ' : '') + px + 'px ' + fontFamily;
+    };
+
+    // Measure at requested size; if too wide, shrink the font and the
+    // letter-spacing proportionally until it fits. Stops at 8px so we
+    // never produce illegible text — past that it just clips.
+    let actualPx = fontPx;
+    setFont(actualPx);
+    let spacingPx = actualPx * spacingEm;
+    let w = measureSpaced(ctx, text, spacingPx);
+    if (w > maxWidth) {
+      const scale = maxWidth / w;
+      actualPx = Math.max(8, fontPx * scale);
+      setFont(actualPx);
+      spacingPx = actualPx * spacingEm;
+      w = measureSpaced(ctx, text, spacingPx);
+    }
+
     ctx.fillStyle = color;
     ctx.textBaseline = 'middle';
-    const spacingPx = fontPx * spacingEm;
-    const w = measureSpaced(ctx, text, spacingPx);
     drawSpaced(ctx, text, (IMG_W - w) / 2, y, spacingPx);
   }
 
