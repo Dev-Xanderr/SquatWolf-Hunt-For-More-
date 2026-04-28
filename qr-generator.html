@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>QR Poster Generator | THE HUNT FOR MORE</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&display=swap');
+
+  :root {
+    --black: #000000;
+    --off-white: #f7f5f2;
+    --aurora-red: #B93A32;
+    --mid-grey: #888;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #1a1a1a;
+    font-family: 'Space Mono', monospace;
+    color: var(--off-white);
+    padding: 2rem 1rem;
+  }
+
+  .controls {
+    max-width: 720px;
+    margin: 0 auto 2rem;
+    background: #111;
+    padding: 1.5rem;
+    border-radius: 8px;
+    border: 1px solid #333;
+  }
+
+  .controls h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem;
+    letter-spacing: 0.15em;
+    margin-bottom: 1rem;
+  }
+
+  .controls label {
+    display: block;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--mid-grey);
+    margin: 0.8rem 0 0.3rem;
+  }
+
+  .controls input[type="text"], .controls input[type="number"] {
+    width: 100%;
+    padding: 0.6rem 0.8rem;
+    background: #000;
+    border: 1px solid #333;
+    color: var(--off-white);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.85rem;
+    border-radius: 4px;
+  }
+
+  .controls .row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+  }
+
+  .controls .row > div { flex: 1; }
+
+  .controls button {
+    margin-top: 1.2rem;
+    padding: 0.8rem 1.6rem;
+    background: var(--aurora-red);
+    color: var(--off-white);
+    border: none;
+    border-radius: 6px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+  }
+
+  .hint {
+    margin-top: 0.8rem;
+    font-size: 0.7rem;
+    color: var(--mid-grey);
+    line-height: 1.5;
+  }
+
+  .posters {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 1.5rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  /* === POSTER (matches printed PNG design) === */
+  .poster {
+    background: var(--black);
+    color: var(--off-white);
+    border-top: 8px solid var(--aurora-red);
+    border-bottom: 8px solid var(--aurora-red);
+    padding: 1.5rem 1.2rem 1.8rem;
+    text-align: center;
+    aspect-ratio: 7 / 9;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .poster .title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.5rem;
+    letter-spacing: 0.12em;
+    color: var(--off-white);
+  }
+
+  .poster .piece-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.5rem;
+    letter-spacing: 0.12em;
+    color: var(--aurora-red);
+    margin-bottom: 1rem;
+  }
+
+  .poster .qr-frame {
+    background: var(--off-white);
+    padding: 1rem;
+    border-radius: 4px;
+    flex-shrink: 1;
+    flex-grow: 0;
+    line-height: 0;
+  }
+
+  .poster .qr-frame canvas,
+  .poster .qr-frame img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: 320px;
+  }
+
+  .poster .scan-cta {
+    margin-top: 0.9rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
+    color: var(--mid-grey);
+    text-transform: uppercase;
+  }
+
+  /* THIS IS THE THING THE USER ASKED TO MAKE BIGGER */
+  .poster .cobrand {
+    margin-top: 0.7rem;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem;
+    letter-spacing: 0.22em;
+    color: var(--off-white);
+    text-transform: uppercase;
+  }
+
+  .poster .cobrand .x {
+    color: var(--aurora-red);
+    margin: 0 0.3em;
+  }
+
+  /* Print: one poster per page, edge-to-edge */
+  @media print {
+    body { background: #000; padding: 0; }
+    .controls { display: none; }
+    .posters {
+      display: block;
+      max-width: none;
+      margin: 0;
+      gap: 0;
+    }
+    .poster {
+      page-break-after: always;
+      break-after: page;
+      aspect-ratio: auto;
+      width: 100%;
+      min-height: 100vh;
+      padding: 3rem 2rem;
+      border-top-width: 16px;
+      border-bottom-width: 16px;
+    }
+    .poster .qr-frame img,
+    .poster .qr-frame canvas {
+      max-width: 70vw;
+      max-height: 70vh;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <h1>QR Poster Generator</h1>
+  <div class="row">
+    <div>
+      <label for="baseUrl">Base URL</label>
+      <input type="text" id="baseUrl" value="https://dev-xanderr.github.io/SquatWolf-Hunt-For-More-/">
+    </div>
+    <div style="max-width: 160px;">
+      <label for="cobrandSize">Co-brand size (rem)</label>
+      <input type="number" id="cobrandSize" value="1.4" step="0.1" min="0.5" max="3">
+    </div>
+  </div>
+  <button onclick="renderAll()">Regenerate</button>
+  <button onclick="window.print()" style="background:#222;border:1px solid #444;">Print all 9</button>
+  <p class="hint">
+    Each poster links to <code>?p=N</code> on the base URL above. Adjust the
+    co-brand size and click Regenerate. Use Print to export all 9 as a PDF
+    (one per page), or right-click any QR &rarr; Save image to download
+    individual posters as PNG via screenshot.
+  </p>
+</div>
+
+<div class="posters" id="posters"></div>
+
+<!-- QR library: kazuhikoarase qrcode-generator (small, no deps, MIT) -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script>
+  function makeQrSvg(text) {
+    // Type 0 = auto, error correction "M" gives ~15% redundancy — fine for printing
+    var qr = qrcode(0, 'M');
+    qr.addData(text);
+    qr.make();
+    // 4-cell quiet zone, 8px per cell — produces a crisp ~300px QR
+    return qr.createSvgTag({ cellSize: 8, margin: 4, scalable: true });
+  }
+
+  function renderAll() {
+    var base = document.getElementById('baseUrl').value.trim();
+    if (!base.endsWith('/') && !base.includes('?')) base += '/';
+    var cobrandSize = document.getElementById('cobrandSize').value;
+
+    var container = document.getElementById('posters');
+    container.innerHTML = '';
+
+    for (var i = 1; i <= 9; i++) {
+      var url = base + '?p=' + i;
+      var poster = document.createElement('div');
+      poster.className = 'poster';
+      poster.innerHTML =
+        '<div class="title">THE HUNT FOR MORE</div>' +
+        '<div class="piece-num">PIECE ' + i + ' OF 9</div>' +
+        '<div class="qr-frame">' + makeQrSvg(url) + '</div>' +
+        '<div class="scan-cta">Scan to reveal piece</div>' +
+        '<div class="cobrand" style="font-size:' + cobrandSize + 'rem">' +
+          'SQUATWOLF<span class="x">&times;</span>ZIGCHAIN' +
+        '</div>';
+      container.appendChild(poster);
+    }
+  }
+
+  renderAll();
+</script>
+</body>
+</html>
