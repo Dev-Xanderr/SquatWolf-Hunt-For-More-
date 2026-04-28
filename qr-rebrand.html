@@ -47,13 +47,14 @@
     color: var(--mid-grey);
     margin: 0.8rem 0 0.3rem;
   }
-  input[type="number"], input[type="range"] {
+  input[type="number"], input[type="range"], input[type="text"] {
     width: 100%;
     padding: 0.5rem 0.7rem;
     background: #000;
     border: 1px solid #333;
     color: var(--off-white);
     font-family: 'Space Mono', monospace;
+    font-size: 0.85rem;
     border-radius: 4px;
   }
   input[type="range"] { padding: 0; }
@@ -125,19 +126,41 @@
   <p class="lead">
     Loads the existing <code>qr_piece_*.png</code> files, blanks out the
     bottom caption strip (preserving the red border bars and the QR itself),
-    and re-draws the co-brand at a larger size. The QR pixels are never
-    touched, so existing scans still resolve correctly.
+    and re-draws three editable lines: a bold headline, a body line, and a
+    coloured callout. Edit the text/sizes below — preview updates live. The
+    QR pixels are never touched, so existing scans still resolve correctly.
   </p>
 
   <div class="row">
     <div>
-      <label for="cobrandSize">Co-brand font size (px)</label>
-      <input type="range" id="cobrandSize" min="14" max="60" value="36">
-      <div class="status"><span id="sizeReadout">36</span>px (original was ~14px)</div>
+      <label for="headlineText">Headline (white, bold)</label>
+      <input type="text" id="headlineText" value="JOIN THE SCAVENGER HUNT">
     </div>
+    <div style="max-width: 160px;">
+      <label for="headlineSize">Size (px)</label>
+      <input type="number" id="headlineSize" value="30" min="14" max="48">
+    </div>
+  </div>
+
+  <div class="row">
     <div>
-      <label for="letterSpacing">Letter spacing (em)</label>
-      <input type="number" id="letterSpacing" value="0.22" step="0.02" min="0" max="0.5">
+      <label for="bodyText">Body (grey)</label>
+      <input type="text" id="bodyText" value="Scan all 9 QR codes to get a SQUATWOLF goodie bag">
+    </div>
+    <div style="max-width: 160px;">
+      <label for="bodySize">Size (px)</label>
+      <input type="number" id="bodySize" value="14" min="10" max="28">
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label for="calloutText">Callout (aurora red)</label>
+      <input type="text" id="calloutText" value="5 WINNERS ONLY">
+    </div>
+    <div style="max-width: 160px;">
+      <label for="calloutSize">Size (px)</label>
+      <input type="number" id="calloutSize" value="22" min="14" max="40">
     </div>
   </div>
 
@@ -210,56 +233,61 @@
     }
   }
 
+  // Draw a single centered line with manual letter-spacing.
+  // Returns the y-position used (for stacking).
+  function drawCenteredLine(ctx, text, y, fontPx, fontFamily, color, spacingEm) {
+    ctx.font = fontPx + 'px ' + fontFamily;
+    ctx.fillStyle = color;
+    ctx.textBaseline = 'middle';
+    const spacingPx = fontPx * spacingEm;
+    const w = measureSpaced(ctx, text, spacingPx);
+    drawSpaced(ctx, text, (IMG_W - w) / 2, y, spacingPx);
+  }
+
   async function renderTile(tile, sourceImg) {
     const ctx = tile.canvas.getContext('2d');
     ctx.clearRect(0, 0, IMG_W, 834);
     ctx.drawImage(sourceImg, 0, 0);
 
-    // Blackout the caption strip
+    // Blackout the caption strip — preserves QR pixels and red border bars
     ctx.fillStyle = '#000';
     ctx.fillRect(0, STRIP_TOP, IMG_W, STRIP_BOTTOM - STRIP_TOP);
 
-    // === Line 1: SCAN TO REVEAL PIECE (kept at original modest size) ===
-    const scanSize = 18;
-    const scanSpacing = 0.2; // em
-    ctx.fillStyle = '#888';
-    ctx.font = scanSize + 'px "Space Mono", monospace';
-    ctx.textBaseline = 'middle';
-    const scanText = 'SCAN TO REVEAL PIECE';
-    const scanSpacingPx = scanSize * scanSpacing;
-    const scanW = measureSpaced(ctx, scanText, scanSpacingPx);
-    drawSpaced(ctx, scanText, (IMG_W - scanW) / 2, STRIP_TOP + 22, scanSpacingPx);
+    // Read editable values
+    const headline = document.getElementById('headlineText').value;
+    const headlineSize = parseInt(document.getElementById('headlineSize').value, 10);
+    const body = document.getElementById('bodyText').value;
+    const bodySize = parseInt(document.getElementById('bodySize').value, 10);
+    const callout = document.getElementById('calloutText').value;
+    const calloutSize = parseInt(document.getElementById('calloutSize').value, 10);
 
-    // === Line 2: SQUATWOLF x ZIGCHAIN (the one being enlarged) ===
-    const cbSize = parseInt(document.getElementById('cobrandSize').value, 10);
-    const cbSpacing = parseFloat(document.getElementById('letterSpacing').value);
-    const cbSpacingPx = cbSize * cbSpacing;
+    // Vertical layout — strip is ~123px tall (691 to 814).
+    // Stack the three lines with proportional gaps so changes to any size
+    // re-center automatically.
+    const stripCenter = (STRIP_TOP + STRIP_BOTTOM) / 2;
+    const gap = 8;
+    const totalH = headlineSize + gap + bodySize + gap + calloutSize;
+    let y = stripCenter - totalH / 2 + headlineSize / 2;
 
-    ctx.font = cbSize + 'px "Bebas Neue", sans-serif';
-    ctx.textBaseline = 'middle';
+    // Line 1 — headline (Bebas Neue, white)
+    if (headline) {
+      drawCenteredLine(ctx, headline, y, headlineSize,
+        '"Bebas Neue", sans-serif', '#f7f5f2', 0.15);
+    }
+    y += headlineSize / 2 + gap + bodySize / 2;
 
-    const left = 'SQUATWOLF';
-    const x = '×';
-    const right = 'ZIGCHAIN';
-    const gap = cbSize * 0.35;
+    // Line 2 — body (Space Mono, grey)
+    if (body) {
+      drawCenteredLine(ctx, body, y, bodySize,
+        '"Space Mono", monospace', '#aaaaaa', 0.08);
+    }
+    y += bodySize / 2 + gap + calloutSize / 2;
 
-    const wL = measureSpaced(ctx, left, cbSpacingPx);
-    const wX = ctx.measureText(x).width;
-    const wR = measureSpaced(ctx, right, cbSpacingPx);
-    const total = wL + gap + wX + gap + wR;
-
-    // Vertical center of remaining strip (below the SCAN line)
-    const cbY = STRIP_TOP + 22 + 26 + cbSize / 2 + 4;
-
-    let cx = (IMG_W - total) / 2;
-    ctx.fillStyle = '#f7f5f2';
-    drawSpaced(ctx, left, cx, cbY, cbSpacingPx);
-    cx += wL + gap;
-    ctx.fillStyle = '#B93A32';
-    ctx.fillText(x, cx, cbY);
-    cx += wX + gap;
-    ctx.fillStyle = '#f7f5f2';
-    drawSpaced(ctx, right, cx, cbY, cbSpacingPx);
+    // Line 3 — callout (Bebas Neue, aurora red)
+    if (callout) {
+      drawCenteredLine(ctx, callout, y, calloutSize,
+        '"Bebas Neue", sans-serif', '#B93A32', 0.18);
+    }
 
     // Update download link
     tile.link.href = tile.canvas.toDataURL('image/png');
@@ -292,8 +320,16 @@
     });
   }
 
-  document.getElementById('cobrandSize').addEventListener('input', (e) => {
-    document.getElementById('sizeReadout').textContent = e.target.value;
+  // Live re-render on any input change (debounced lightly)
+  let renderTimer = null;
+  function scheduleRender() {
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(renderAll, 200);
+  }
+  ['headlineText', 'headlineSize', 'bodyText', 'bodySize',
+   'calloutText', 'calloutSize'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', scheduleRender);
   });
 
   buildTiles();
