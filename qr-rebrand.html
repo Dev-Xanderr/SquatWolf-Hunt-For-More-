@@ -175,6 +175,14 @@
     </div>
   </div>
 
+  <div class="row">
+    <div>
+      <label for="qrScale">QR size (% of original) — smaller = more text room</label>
+      <input type="range" id="qrScale" min="60" max="100" value="85">
+      <div class="status"><span id="qrScaleReadout">85</span>% of original</div>
+    </div>
+  </div>
+
   <button onclick="renderAll()">Regenerate preview</button>
   <button class="secondary" onclick="downloadAll()">Download all 9</button>
   <div class="status" id="globalStatus">Loading fonts &amp; source images&hellip;</div>
@@ -194,10 +202,13 @@
   //   - Bottom caption region: y ~ 691 .. 814
   //   - Red bottom bar: y >= 815
   const IMG_W = 694;
-  const TOP_STRIP_TOP = 9;
-  const TOP_STRIP_BOTTOM = 88;
-  const BOT_STRIP_TOP = 691;
-  const BOT_STRIP_BOTTOM = 814;
+  const RED_TOP_END = 9;        // red top bar ends here
+  const RED_BOT_START = 815;    // red bottom bar starts here
+  // Region of the SOURCE PNG that contains the white-framed QR.
+  // Cropped from here and re-drawn scaled in the canvas.
+  const SRC_QR_TOP = 90;
+  const SRC_QR_BOTTOM = 690;
+  const SRC_QR_H = SRC_QR_BOTTOM - SRC_QR_TOP; // 600
 
   const tiles = [];
 
@@ -276,12 +287,36 @@
   async function renderTile(tile, sourceImg) {
     const ctx = tile.canvas.getContext('2d');
     ctx.clearRect(0, 0, IMG_W, 834);
+    // Draw source first so the red border bars come along for free
     ctx.drawImage(sourceImg, 0, 0);
 
-    // Blackout both header strips — preserves QR pixels and red border bars
+    // Blackout EVERYTHING between the red bars — text strips and QR alike.
+    // We'll redraw a scaled copy of the QR region next, leaving the freed
+    // space available for the text strips above and below it.
     ctx.fillStyle = '#000';
-    ctx.fillRect(0, TOP_STRIP_TOP, IMG_W, TOP_STRIP_BOTTOM - TOP_STRIP_TOP);
-    ctx.fillRect(0, BOT_STRIP_TOP, IMG_W, BOT_STRIP_BOTTOM - BOT_STRIP_TOP);
+    ctx.fillRect(0, RED_TOP_END, IMG_W, RED_BOT_START - RED_TOP_END);
+
+    // Read QR scale (60–100 %) and compute drawn bounds
+    const qrScalePct = parseInt(document.getElementById('qrScale').value, 10) || 85;
+    const qrScale = qrScalePct / 100;
+    const drawnQrH = SRC_QR_H * qrScale;
+    const drawnQrW = IMG_W * qrScale;
+    const availH = RED_BOT_START - RED_TOP_END; // 806
+    const qrTop = RED_TOP_END + (availH - drawnQrH) / 2;
+    const qrLeft = (IMG_W - drawnQrW) / 2;
+
+    // Re-draw the QR region scaled and centered
+    ctx.drawImage(
+      sourceImg,
+      0, SRC_QR_TOP, IMG_W, SRC_QR_H,        // source crop
+      qrLeft, qrTop, drawnQrW, drawnQrH      // dest
+    );
+
+    // Strip bounds derived from the scaled QR position
+    const TOP_STRIP_TOP = RED_TOP_END;
+    const TOP_STRIP_BOTTOM = qrTop;
+    const BOT_STRIP_TOP = qrTop + drawnQrH;
+    const BOT_STRIP_BOTTOM = RED_BOT_START;
 
     // Read editable values (with safe fallbacks if any size is cleared)
     const sizeOr = (id, fallback) => {
@@ -358,9 +393,14 @@
     renderTimer = setTimeout(renderAll, 200);
   }
   ['titleText', 'titleSize', 'pieceLabelText', 'pieceLabelSize',
-   'bodyText', 'bodySize', 'calloutText', 'calloutSize'].forEach((id) => {
+   'bodyText', 'bodySize', 'calloutText', 'calloutSize',
+   'qrScale'].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', scheduleRender);
+  });
+
+  document.getElementById('qrScale').addEventListener('input', (e) => {
+    document.getElementById('qrScaleReadout').textContent = e.target.value;
   });
 
   buildTiles();
