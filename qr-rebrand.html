@@ -133,34 +133,45 @@
 
   <div class="row">
     <div>
-      <label for="headlineText">Headline (white, bold)</label>
-      <input type="text" id="headlineText" value="JOIN THE SCAVENGER HUNT">
+      <label for="titleText">Title — top of poster (white)</label>
+      <input type="text" id="titleText" value="JOIN THE SCAVENGER HUNT">
     </div>
     <div style="max-width: 160px;">
-      <label for="headlineSize">Size (px)</label>
-      <input type="number" id="headlineSize" value="30" min="14" max="48">
+      <label for="titleSize">Size (px)</label>
+      <input type="number" id="titleSize" value="30" min="14" max="48">
     </div>
   </div>
 
   <div class="row">
     <div>
-      <label for="bodyText">Body (grey)</label>
+      <label for="pieceLabelText">Piece label (red) — use {N} for piece number</label>
+      <input type="text" id="pieceLabelText" value="PIECE {N} OF 9">
+    </div>
+    <div style="max-width: 160px;">
+      <label for="pieceLabelSize">Size (px)</label>
+      <input type="number" id="pieceLabelSize" value="26" min="14" max="40">
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label for="bodyText">Body — bottom strip (grey)</label>
       <input type="text" id="bodyText" value="Scan all 9 QR codes to get a SQUATWOLF goodie bag">
     </div>
     <div style="max-width: 160px;">
       <label for="bodySize">Size (px)</label>
-      <input type="number" id="bodySize" value="14" min="10" max="28">
+      <input type="number" id="bodySize" value="16" min="10" max="28">
     </div>
   </div>
 
   <div class="row">
     <div>
-      <label for="calloutText">Callout (aurora red)</label>
+      <label for="calloutText">Callout — bottom strip (aurora red)</label>
       <input type="text" id="calloutText" value="5 WINNERS ONLY">
     </div>
     <div style="max-width: 160px;">
       <label for="calloutSize">Size (px)</label>
-      <input type="number" id="calloutSize" value="22" min="14" max="40">
+      <input type="number" id="calloutSize" value="26" min="14" max="40">
     </div>
   </div>
 
@@ -173,20 +184,20 @@
 
 <script>
   // === LAYOUT CONSTANTS ===
-  // Source PNG is 694 x 834. The bottom caption area sits between the QR
-  // frame and the red bottom bar. We repaint this strip black and redraw
-  // the two text lines.
+  // Source PNG is 694 x 834. We repaint two strips black (preserving the
+  // red border bars and the white QR frame), then redraw text in each.
   //
   // Measured from qr_piece_1.png:
+  //   - Red top bar: y < 9
+  //   - Top header text region: y ~ 9 .. 88 (held "THE HUNT FOR MORE" + "PIECE N OF 9")
+  //   - White QR frame: y ~ 90 .. 690
+  //   - Bottom caption region: y ~ 691 .. 814
   //   - Red bottom bar: y >= 815
-  //   - Bottom edge of white QR frame: y ~ 690
-  //   - "SCAN TO REVEAL PIECE" line was around y=707
-  //   - "SQUATWOLF x ZIGCHAIN" line was around y=736
-  //
-  // We blackout y = 691 .. 814 (full width) and redraw both lines.
-  const STRIP_TOP = 691;
-  const STRIP_BOTTOM = 814; // exclusive of red bar
   const IMG_W = 694;
+  const TOP_STRIP_TOP = 9;
+  const TOP_STRIP_BOTTOM = 88;
+  const BOT_STRIP_TOP = 691;
+  const BOT_STRIP_BOTTOM = 814;
 
   const tiles = [];
 
@@ -244,50 +255,60 @@
     drawSpaced(ctx, text, (IMG_W - w) / 2, y, spacingPx);
   }
 
+  // Stack a list of {text, size, font, color, spacing} lines vertically
+  // centered within [top, bottom], with a uniform gap between them.
+  function drawStack(ctx, lines, top, bottom, gap) {
+    const visible = lines.filter(l => l.text);
+    if (!visible.length) return;
+    const totalH = visible.reduce((s, l) => s + l.size, 0)
+                 + gap * (visible.length - 1);
+    const center = (top + bottom) / 2;
+    let y = center - totalH / 2 + visible[0].size / 2;
+    for (let i = 0; i < visible.length; i++) {
+      const l = visible[i];
+      drawCenteredLine(ctx, l.text, y, l.size, l.font, l.color, l.spacing);
+      if (i < visible.length - 1) {
+        y += l.size / 2 + gap + visible[i + 1].size / 2;
+      }
+    }
+  }
+
   async function renderTile(tile, sourceImg) {
     const ctx = tile.canvas.getContext('2d');
     ctx.clearRect(0, 0, IMG_W, 834);
     ctx.drawImage(sourceImg, 0, 0);
 
-    // Blackout the caption strip — preserves QR pixels and red border bars
+    // Blackout both header strips — preserves QR pixels and red border bars
     ctx.fillStyle = '#000';
-    ctx.fillRect(0, STRIP_TOP, IMG_W, STRIP_BOTTOM - STRIP_TOP);
+    ctx.fillRect(0, TOP_STRIP_TOP, IMG_W, TOP_STRIP_BOTTOM - TOP_STRIP_TOP);
+    ctx.fillRect(0, BOT_STRIP_TOP, IMG_W, BOT_STRIP_BOTTOM - BOT_STRIP_TOP);
 
     // Read editable values
-    const headline = document.getElementById('headlineText').value;
-    const headlineSize = parseInt(document.getElementById('headlineSize').value, 10);
+    const title = document.getElementById('titleText').value;
+    const titleSize = parseInt(document.getElementById('titleSize').value, 10);
+    const pieceLabel = document.getElementById('pieceLabelText').value
+      .replace('{N}', tile.i);
+    const pieceLabelSize = parseInt(document.getElementById('pieceLabelSize').value, 10);
     const body = document.getElementById('bodyText').value;
     const bodySize = parseInt(document.getElementById('bodySize').value, 10);
     const callout = document.getElementById('calloutText').value;
     const calloutSize = parseInt(document.getElementById('calloutSize').value, 10);
 
-    // Vertical layout — strip is ~123px tall (691 to 814).
-    // Stack the three lines with proportional gaps so changes to any size
-    // re-center automatically.
-    const stripCenter = (STRIP_TOP + STRIP_BOTTOM) / 2;
-    const gap = 8;
-    const totalH = headlineSize + gap + bodySize + gap + calloutSize;
-    let y = stripCenter - totalH / 2 + headlineSize / 2;
+    // === TOP STRIP — title + piece label ===
+    drawStack(ctx, [
+      { text: title, size: titleSize,
+        font: '"Bebas Neue", sans-serif', color: '#f7f5f2', spacing: 0.13 },
+      { text: pieceLabel, size: pieceLabelSize,
+        font: '"Bebas Neue", sans-serif', color: '#B93A32', spacing: 0.13 }
+    ], TOP_STRIP_TOP, TOP_STRIP_BOTTOM, 6);
 
-    // Line 1 — headline (Bebas Neue, white)
-    if (headline) {
-      drawCenteredLine(ctx, headline, y, headlineSize,
-        '"Bebas Neue", sans-serif', '#f7f5f2', 0.15);
-    }
-    y += headlineSize / 2 + gap + bodySize / 2;
-
-    // Line 2 — body (Space Mono, grey)
-    if (body) {
-      drawCenteredLine(ctx, body, y, bodySize,
-        '"Space Mono", monospace', '#aaaaaa', 0.08);
-    }
-    y += bodySize / 2 + gap + calloutSize / 2;
-
-    // Line 3 — callout (Bebas Neue, aurora red)
-    if (callout) {
-      drawCenteredLine(ctx, callout, y, calloutSize,
-        '"Bebas Neue", sans-serif', '#B93A32', 0.18);
-    }
+    // === BOTTOM STRIP — body + callout ===
+    drawStack(ctx, [
+      { text: body, size: bodySize,
+        font: '"Space Mono", monospace', color: '#aaaaaa', spacing: 0.08 },
+      { text: callout, size: calloutSize,
+        font: '"Bebas Neue", sans-serif', color: '#B93A32', spacing: 0.18 }
+    ], BOT_STRIP_TOP, BOT_STRIP_BOTTOM, 12);
 
     // Update download link
     tile.link.href = tile.canvas.toDataURL('image/png');
@@ -326,8 +347,8 @@
     clearTimeout(renderTimer);
     renderTimer = setTimeout(renderAll, 200);
   }
-  ['headlineText', 'headlineSize', 'bodyText', 'bodySize',
-   'calloutText', 'calloutSize'].forEach((id) => {
+  ['titleText', 'titleSize', 'pieceLabelText', 'pieceLabelSize',
+   'bodyText', 'bodySize', 'calloutText', 'calloutSize'].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', scheduleRender);
   });
